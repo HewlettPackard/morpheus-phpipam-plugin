@@ -862,7 +862,11 @@ class PhpIpamProvider implements IPAMProvider {
         requestOptions.ignoreSSL = true
 
         def results = callApi(client,poolServer.serviceUrl, 'subnets', getAppId(poolServer), token, requestOptions, 'GET')
-        rtn.success = results.success
+        log.debug("listNetworks: {}", results)
+        if (results.success && !results.data?.data){ //Known phpIPAM issue — if the number of networks in phpIPAM exceeds a certain threshold, the API may return no data. 
+            log.warn("The API call to phpIPAM returned no results. This may be due to a temporary issue or bug in the external application.")
+        }
+        rtn.success = results.success && (results.data?.data ?: false)
         if(rtn.success) {
             def networkList = results.data.data
             // exclude ipv6 for now
