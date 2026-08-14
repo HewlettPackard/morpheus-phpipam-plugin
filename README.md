@@ -1,64 +1,131 @@
-# Morpheus {php}IPAM Plugin
+# Morpheus phpIPAM Plugin
 
-This plugin provides IP address management integration between [{php}IPAM](https://phpipam.net/) and [Morpheus](https://morpheusdata.com). It enables network pool sync, IPv4 and IPv6 pool types, optional existing IP inventory, and host record allocation from within the Morpheus platform.
+The Morpheus phpIPAM Plugin integrates Morpheus with phpIPAM to provide IP address management (IPAM) within Morpheus. The plugin communicates with the phpIPAM REST API to allocate and release IP addresses from phpIPAM-managed subnets and synchronise network pools.
 
-## Requirements
+## Table of Contents
 
-| Component | Minimum Version |
-|-----------|----------------|
-| Morpheus | 7.0.2 |
+- [Features](#features)
+- [Requirements](#requirements)
+- [Repository structure](#repository-structure)
+- [Building the plugin](#building-the-plugin)
+- [License](#license)
+- [Installing](#installing)
+- [Detailed Usage Steps](#detailed-usage-steps)
+- [API Endpoints](#api-endpoints)
 
-## Installation
-
-1. Download the latest `.jar` from the [Releases](https://github.com/gomorpheus/morpheus-phpipam-plugin/releases) page, or [build it yourself](#building).
-2. In Morpheus, navigate to **Administration → Integrations → Plugins**.
-3. Click **Browse** and upload the `.jar` file.
-4. The **phpIPAM** IPAM integration will appear after the plugin loads.
-
-## Configuration
-
-When adding a phpIPAM IPAM integration in Morpheus (**Infrastructure → Network → IPAM Integrations**), provide the following:
-
-| Field | Description |
-|-------|-------------|
-| **API Url** | phpIPAM API endpoint URL. |
-| **App ID** | phpIPAM API application identifier. |
-| **Credentials** | Select whether to use local username/password values or a stored Morpheus username/password credential. |
-| **Username** | phpIPAM API username when using local credentials. |
-| **Password** | phpIPAM API password when using local credentials. |
-| **Throttle Rate** | Optional request throttle rate for phpIPAM API calls. |
-| **Disable SSL SNI Verification** | Disable SSL SNI verification for the phpIPAM endpoint. |
-| **Inventory Existing** | Sync existing phpIPAM address records into Morpheus network pool IP inventory. |
-| **Network Filter** | Optional filter applied when syncing phpIPAM networks. |
+---
 
 ## Features
 
-### IPAM Integration
+### IP Address Management
 
-The plugin registers an `IPAMProvider` for phpIPAM. The following resources are discovered and kept in sync from phpIPAM:
+Allocate and release IP addresses from phpIPAM subnets within Morpheus. Supports automatic next-available IP selection from subnets, manual IP entry, existing inventory import, and configurable network filtering.
 
-- **Network Pools** — phpIPAM subnets are synchronized into Morpheus network pools.
-- **IPv4 and IPv6 Pool Types** — separate phpIPAM and phpIPAM IPv6 pool types are registered.
-- **Pool Ranges** — CIDR and range information is mapped onto Morpheus network pool ranges.
-- **Existing IP Inventory** — when enabled, existing phpIPAM address records are synchronized into Morpheus pool IP records.
+### Cloud Sync
 
-### Host Record Management
+Morpheus synchronises the following phpIPAM resources for inventory:
 
-Morpheus can allocate and release addresses through phpIPAM during provisioning workflows. Supported operations include:
+- Subnets as Morpheus network pools
+- IP address allocations within each subnet
 
-- Create a requested IP address in a phpIPAM subnet.
-- Allocate the next free IP address from a phpIPAM subnet.
-- Update hostnames on phpIPAM address records.
-- Delete phpIPAM address records when releasing addresses.
+---
 
-## Building
+## Requirements
 
-```bash
-./gradlew shadowJar
+| Requirement | Version |
+|-------------|---------|
+| Morpheus | 7.0.2 or later |
+| Java | 11 or later |
+| Gradle | Use the included Gradle wrapper (`./gradlew`) |
+
+Additional prerequisites:
+
+- A running phpIPAM instance with the REST API enabled and accessible from the Morpheus appliance
+- A phpIPAM API application configured with an **App ID** and read/write permissions
+- A phpIPAM user account with access to the subnets managed by Morpheus
+- Network access from the Morpheus appliance to the phpIPAM host on the configured port
+
+---
+
+## Repository structure
+
+```
+src/main/groovy/com/morpheusdata/phpipam/
+├── PhpIpamPlugin.groovy    - Plugin entry point; registers PhpIpamProvider
+└── PhpIpamProvider.groovy  - IPAMProvider implementation; IPAM operations, sync, OptionTypes, API client
+build.gradle, gradle.properties - Build configuration and plugin metadata
 ```
 
-The plugin JAR will be written to `build/libs/`.
+---
+
+## Building the plugin
+
+Run the following command to compile and package the plugin jar:
+
+```bash
+./gradlew clean build
+```
+
+The packaged jar will be written to `build/libs/`.
+
+To execute tests, use the following command:
+
+```bash
+./gradlew test
+```
+
+---
 
 ## License
 
-Copyright 2022 Morpheus Data, LLC. Licensed under the [Apache License, Version 2.0](LICENSE).
+This project is licensed under the Apache License 2.0.
+
+See the [LICENSE](LICENSE) file for details.
+
+---
+
+## Installing
+
+1. Build the plugin (see [Building the plugin](#building-the-plugin)) or download a released jar.
+2. In Morpheus, navigate to **Administration > Integrations > Plugins**.
+3. Click **Add** and upload the `morpheus-phpipam-plugin-<version>.jar` from `build/libs/`.
+4. Navigate to **Infrastructure > Networks > IP Pools > Add** and select **phpIPAM** to configure the integration.
+
+---
+
+## Detailed Usage Steps
+
+### Adding a phpIPAM IPAM Integration
+
+1. Go to **Infrastructure > Networks > IP Pools > Add**.
+2. Select **phpIPAM** as the pool server type.
+3. Enter:
+   - **API Url** — phpIPAM base URL (e.g. `https://phpipam.example.com/`)
+   - **App ID** — the phpIPAM API application ID configured in phpIPAM
+   - **Username** and **Password** (or a stored credential)
+4. Optionally configure **Throttle Rate**, **Disable SSL SNI Verification**, **Inventory Existing**, and **Network Filter**.
+5. Save. Morpheus authenticates against phpIPAM and syncs available subnets as network pools.
+
+### Allocating an IP Address
+
+When provisioning an instance on a network backed by a phpIPAM subnet, Morpheus calls the phpIPAM API to allocate the next available IP from the subnet. The IP is registered in phpIPAM with the instance details.
+
+### Releasing an IP Address
+
+When an instance is decommissioned, Morpheus calls the phpIPAM API to delete the IP address record from the subnet.
+
+---
+
+## API Endpoints
+
+This plugin communicates with the **phpIPAM REST API** at `{serviceUrl}/api/{appId}/`. Authentication uses a session token obtained by posting credentials to the user controller. All calls include `?app_id={appId}` as a query parameter.
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/{appId}/user/` | POST | Authenticate and obtain a session token |
+| `/api/{appId}/subnets/` | GET | List subnets |
+| `/api/{appId}/subnets/{id}/addresses/` | GET | List IP addresses in a subnet |
+| `/api/{appId}/subnets/{id}/first_free/` | GET | Get next available IP in a subnet |
+| `/api/{appId}/addresses/` | POST | Create (allocate) an IP address record |
+| `/api/{appId}/addresses/{id}/` | PUT | Update an IP address record |
+| `/api/{appId}/addresses/{id}/` | DELETE | Delete (release) an IP address record |
